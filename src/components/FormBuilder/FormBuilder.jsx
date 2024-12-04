@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import FormHeader from './FormHeader';
 import QuestionCard from './QuestionCard';
 import QuestionToolbar from './QuestionToolbar';
-import { EyeIcon, DocumentCheckIcon, TrashIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import SharedModal from '../SharedForm/ShareForm';
+import { ShareIcon, TrashIcon, EyeIcon, DocumentCheckIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import { saveForm } from '../../api/formApi';
 
 const FormBuilder = () => {
@@ -13,8 +14,9 @@ const FormBuilder = () => {
   const [formTitle, setFormTitle] = useState('Untitled Form');
   const [headerImage, setHeaderImage] = useState(null);
   const [saving, setSaving] = useState(false);
-
-  // Initialize form data from location state (for preview return)
+  const [showSavePopup, setShowSavePopup] = useState(false);
+  const [savedFormId, setSavedFormId] = useState(null);
+  const [showSharedModal, setShowSharedModal] = useState(false);
 
   useEffect(() => {
     if (location.state?.formData) {
@@ -23,10 +25,12 @@ const FormBuilder = () => {
       setHeaderImage(savedImage);
       setQuestions(savedQuestions);
     }
+    const storedFormId = localStorage.getItem('currentFormId');
+    if (storedFormId) {
+      setSavedFormId(storedFormId);
+    }
   }, [location.state]);
 
-
-  // Save to localStorage whenever form data changes
   useEffect(() => {
     const currentForm = {
       formTitle,
@@ -49,11 +53,12 @@ const FormBuilder = () => {
 
   const addQuestion = (type) => {
     const newQuestion = {
-        id: Date.now(),
-        type,
-        question: '',
-        section: '',
-        options: type === 'categorize'
+      id: Date.now(),
+      type,
+      question: '',
+      required: false,
+      section: '',
+      options: type === 'categorize'
         ? {
             column1: [],
             column2: [],
@@ -67,91 +72,115 @@ const FormBuilder = () => {
   const handleSaveForm = async () => {
     try {
       setSaving(true);
+
+      if (!formTitle.trim()) {
+        throw new Error('Form title is required');
+      }
+
+      if (!questions.length) {
+        throw new Error('Form must have at least one question');
+      }
+
+      const invalidQuestions = questions.filter(q => !q.question || !q.question.trim());
+      if (invalidQuestions.length > 0) {
+        throw new Error('All questions must have content');
+      }
+
       const formData = {
         formTitle,
         headerImage,
-        questions, // Questions without IDs; backend will handle ID generation
+        questions: questions.map(q => ({
+          ...q,
+          question: q.question.trim(),
+          required: !!q.required,
+          options: Array.isArray(q.options) ? q.options.filter(opt => opt.trim()) : q.options
+        })),
         createdAt: new Date().toISOString(),
       };
 
-        await saveForm(formData);
-        alert('Form saved successfully!');
-      } catch (error) {
-        alert('Failed to save form: ' + error.message);
+      console.log('Sending form data:', formData);
 
+      const savedForm = await saveForm(formData);
+      console.log('Form saved successfully:', savedForm);
+      
+      // Ensure we're setting the correct ID from the saved form
+      const formId = savedForm.id || savedForm._id; // Handle different possible ID formats
+      setSavedFormId(formId);
+      
+      // Store the form ID in localStorage for persistence
+      localStorage.setItem('currentFormId', formId);
+      setShowSavePopup(true);
+      
+      // Show success message
+      alert('Form saved successfully!');
+      return formId; // Return the form ID for immediate use if needed
+    } catch (error) {
+      console.error('Detailed save error:', error);
+      alert('Failed to save form: ' + error.message);
+      return null;
     } finally {
       setSaving(false);
     }
   };
 
+  const handleShare = async () => {
+    const currentFormId = savedFormId || localStorage.getItem('currentFormId');
+    if (!currentFormId) {
+      alert('Please save the form first to get a share link.');
+      return;
+    }
+    setShowSharedModal(true);
+  };
+
   const clearForm = () => {
-    // Clear all form state
-    setFormTitle('Untitled Form');
-    setHeaderImage(null);
-    setQuestions([]);
-    // Clear localStorage
-    localStorage.removeItem('currentForm');
+    const confirmClear = window.confirm('Are you sure you want to clear the form? This action cannot be undone.');
+    if (confirmClear) {
+      setQuestions([]);
+      setFormTitle('Untitled Form');
+      setHeaderImage(null);
+      setSavedFormId(null);
+      localStorage.removeItem('currentForm');
+      localStorage.removeItem('currentFormId'); // Also remove the stored form ID
+    }
+  };
+
+  const handlePreview = () => {
+    // Store current form data in localStorage
+    const previewData = {
+      formTitle,
+      headerImage,
+      questions
+    };
+    localStorage.setItem('previewForm', JSON.stringify(previewData));
+    // Navigate to preview page
+    navigate('/preview');
   };
 
   const handleDragStart = (e, index) => {
-    e.dataTransfer.setData('questionIndex', index.toString());
-    e.target.classList.add('opacity-50');
+    e.dataTransfer.setData('text/plain', index);
   };
 
   const handleDragEnd = (e) => {
-    e.target.classList.remove('opacity-50');
-    e.target.classList.remove('border-t-4', 'border-b-4');
+    e.preventDefault();
+    const elements = document.querySelectorAll('.group');
+    elements.forEach(element => {
+      element.style.borderColor = 'transparent';
+    });
   };
 
   const handleDragOver = (e, index) => {
     e.preventDefault();
-    const draggedIndex = parseInt(e.dataTransfer.getData('questionIndex'));
-    if (draggedIndex === index) return;
-    
-    const element = e.currentTarget;
-    const rect = element.getBoundingClientRect();
-    const midPoint = rect.top + rect.height / 2;
-    
-    element.classList.remove('border-t-4', 'border-b-4');
-    if (e.clientY < midPoint) {
-      element.classList.add('border-t-4');
-    } else {
-      element.classList.add('border-b-4');
-    }
+    const elements = document.querySelectorAll('.group');
+    elements[index].style.borderColor = '#9333ea';
   };
 
-  const handleSectionChange = (questionId, newSection) => {
-    setQuestions(prevQuestions =>
-      prevQuestions.map(q =>
-        q.id === questionId
-          ? { ...q, section: newSection }
-          : q
-      )
-    );
-  };
-
-  const handleDrop = (e, targetIndex) => {
+  const handleDrop = (e, dropIndex) => {
     e.preventDefault();
-    const sourceIndex = parseInt(e.dataTransfer.getData('questionIndex'));
-    if (sourceIndex === targetIndex) return;
-    
-    e.currentTarget.classList.remove('border-t-4', 'border-b-4');
-    
+    const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
     const newQuestions = [...questions];
-    const [movedQuestion] = newQuestions.splice(sourceIndex, 1);
-    newQuestions.splice(targetIndex, 0, movedQuestion);
+    const [draggedItem] = newQuestions.splice(dragIndex, 1);
+    newQuestions.splice(dropIndex, 0, draggedItem);
     setQuestions(newQuestions);
-  };
-
-  const handlePreview = () => {
-    const formData = {
-      formTitle,
-      headerImage,
-      questions,
-    };
-    // Save current state before navigating
-    localStorage.setItem('currentForm', JSON.stringify(formData));
-    navigate('/preview', { state: { formData } });
   };
 
   return (
@@ -168,7 +197,7 @@ const FormBuilder = () => {
               placeholder="Untitled form"
             />
           </div>
-            <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <button
               onClick={clearForm}
               className="flex items-center px-4 py-2 text-red-600 hover:bg-red-50 rounded"
@@ -184,6 +213,13 @@ const FormBuilder = () => {
               Preview
             </button>
             <button
+              onClick={handleShare}
+              className="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
+              <ShareIcon className="h-5 w-5 mr-2" />
+              Share
+            </button>
+            <button
               onClick={handleSaveForm}
               disabled={saving}
               className="flex items-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
@@ -196,8 +232,6 @@ const FormBuilder = () => {
       </header>
 
       <main className="max-w-3xl mx-auto pt-24 px-4">
-
-
         <FormHeader
           formTitle={formTitle}
           setFormTitle={setFormTitle}
@@ -207,7 +241,6 @@ const FormBuilder = () => {
 
         <div className="mt-6 space-y-4">
           {questions.map((question, index) => (
-
             <div
               key={question.id || index}
               draggable
@@ -218,33 +251,38 @@ const FormBuilder = () => {
               className="transition-all border-transparent border-4 group"
             >
               <div className="flex items-start gap-2 bg-white rounded-lg shadow-sm p-6">
-              <div className="cursor-move mt-2">
-                <Bars3Icon className="h-6 w-6 text-gray-400 hover:text-gray-600" />
-              </div>
-              <div className="flex-1">
-                <div className="mb-4">
-                <input
-                  type="text"
-                  value={question.section || ''}
-                  onChange={(e) => handleSectionChange(question.id, e.target.value)}
-                  placeholder="Section name (optional)"
-                  className="w-full border-b border-gray-200 pb-1 text-sm text-gray-600 focus:outline-none focus:border-purple-500"
-                />
+                <div className="cursor-move mt-2">
+                  <Bars3Icon className="h-6 w-6 text-gray-400 hover:text-gray-600" />
                 </div>
-                <QuestionCard
-                question={question}
-                questions={questions}
-                setQuestions={setQuestions}
-                />
-              </div>
+                <div className="flex-1">
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      value={question.section || ''}
+                      onChange={(e) => handleSectionChange(question.id, e.target.value)}
+                      placeholder="Section name (optional)"
+                      className="w-full border-b border-gray-200 pb-1 text-sm text-gray-600 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <QuestionCard
+                    question={question}
+                    questions={questions}
+                    setQuestions={setQuestions}
+                  />
+                </div>
               </div>
             </div>
-            ))}
-
+          ))}
         </div>
 
         <QuestionToolbar onAddQuestion={addQuestion} />
       </main>
+
+      <SharedModal
+        formId={savedFormId}
+        isOpen={showSharedModal}
+        onClose={() => setShowSharedModal(false)}
+      />
     </div>
   );
 };

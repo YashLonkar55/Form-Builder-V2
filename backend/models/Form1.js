@@ -46,10 +46,18 @@ const formSchema = new mongoose.Schema(
       default: null,
     },
     questions: [questionSchema],
+    shareId: {
+      type: String,
+      required: true,
+      unique: true,
+      default: () => Math.random().toString(36).substr(2, 9)
+    }
   },
   {
     timestamps: true,
   }
 );
+
+
 
 module.exports = mongoose.model('Form', formSchema);
