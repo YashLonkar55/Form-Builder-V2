@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { PencilIcon } from '@heroicons/react/24/outline';
 
 const ClozeQuestion = ({ question, updateQuestion, isEditing }) => {
   const [selectedText, setSelectedText] = useState('');
@@ -14,12 +15,22 @@ const ClozeQuestion = ({ question, updateQuestion, isEditing }) => {
     }
   };
 
+  const handleUnderlineClick = () => {
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+    if (text) {
+      setSelectedText(text);
+      createBlank();
+    }
+  };
+
   const createBlank = () => {
     if (!selectedText) return;
 
     const text = question.question || '';
     const blankId = `blank_${Date.now()}`;
-    const newText = text.replace(selectedText, `[${blankId}]`);
+    // Use underscores instead of [blank_id]
+    const newText = text.replace(selectedText, '_____');
     const newOptions = [...(question.options || [])];
     if (!newOptions.includes(selectedText)) {
       newOptions.push(selectedText);
@@ -75,10 +86,12 @@ const ClozeQuestion = ({ question, updateQuestion, isEditing }) => {
   const renderText = () => {
     if (!question.question) return null;
 
-    const parts = question.question.split(/(\[blank_\d+\])/g);
+    // Split by underscores (5 consecutive underscores)
+    const parts = question.question.split(/(_____)/g);
     return parts.map((part, index) => {
-      if (part.match(/\[blank_\d+\]/)) {
-        const blankId = part.slice(1, -1);
+      if (part === '_____') {
+        // Create a unique ID for each blank
+        const blankId = `blank_${index}`;
         return (
           <span
             key={index}
@@ -102,14 +115,24 @@ const ClozeQuestion = ({ question, updateQuestion, isEditing }) => {
     <div className="mt-4">
       {isEditing ? (
         <>
-          <div className="mb-4">
+            <div className="mb-4 relative">
+            <div className="flex gap-2 mb-2">
+              <button
+              onClick={handleUnderlineClick}
+              className="flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+              title="Underline text to create blank"
+              >
+                <PencilIcon className="h-5 w-5 mr-1" />
+              Underline
+              </button>
+            </div>
             <textarea
               value={question.question || ''}
               onChange={(e) =>
                 updateQuestion({ ...question, question: e.target.value })
               }
               onMouseUp={handleTextSelection}
-              placeholder="Enter your text here. Select words to convert them into blanks."
+                placeholder="Enter your text here. Select words and click underline to convert them into blanks."
               className="w-full p-2 border rounded min-h-[100px] focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
