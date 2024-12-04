@@ -4,12 +4,15 @@ import FormHeader from './FormHeader';
 import QuestionCard from './QuestionCard';
 import QuestionToolbar from './QuestionToolbar';
 import { EyeIcon, DocumentCheckIcon } from '@heroicons/react/24/outline';
+import { saveForm } from '../../api/formApi';
 
 const FormBuilder = () => {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
   const [formTitle, setFormTitle] = useState('Untitled Form');
   const [headerImage, setHeaderImage] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
@@ -24,29 +27,39 @@ const FormBuilder = () => {
 
   const addQuestion = (type) => {
     const newQuestion = {
-      id: Date.now(),
       type,
       question: '',
-      options: type === 'categorize' 
-        ? { 
-            column1: [], 
-            column2: [] 
+      options: type === 'categorize'
+        ? {
+            column1: [],
+            column2: [],
           }
         : [],
-      image: null
+      image: null,
     };
     setQuestions([...questions, newQuestion]);
   };
 
-  const handleSaveForm = () => {
-    const formData = {
-      formTitle,
-      headerImage,
-      questions,
-      createdAt: new Date().toISOString(),
-    };
-    localStorage.setItem('savedForm', JSON.stringify(formData));
-    alert('Form saved successfully!');
+  const handleSaveForm = async () => {
+    try {
+      setSaving(true);
+      const formData = {
+        formTitle,
+        headerImage,
+        questions, // Questions without IDs; backend will handle ID generation
+        createdAt: new Date().toISOString(),
+      };
+
+      const response = await saveForm(formData); // Backend should return the saved form with IDs
+      if (response && response.data) {
+        alert('Form saved successfully!');
+        setQuestions(response.data.questions); // Update with backend-generated IDs
+      }
+    } catch (error) {
+      setError('Failed to save form: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePreview = () => {
@@ -82,16 +95,22 @@ const FormBuilder = () => {
             </button>
             <button
               onClick={handleSaveForm}
-              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+              disabled={saving}
+              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
             >
               <DocumentCheckIcon className="h-5 w-5 mr-2" />
-              Save
+              {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto pt-24 px-4">
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+            <p className="font-medium">Error: {error}</p>
+          </div>
+        )}
         <FormHeader
           formTitle={formTitle}
           setFormTitle={setFormTitle}
@@ -100,9 +119,9 @@ const FormBuilder = () => {
         />
 
         <div className="mt-6 space-y-4">
-          {questions.map((question) => (
+          {questions.map((question, index) => (
             <QuestionCard
-              key={question.id}
+              key={question._id || index} // Use _id if available; fallback to index
               question={question}
               questions={questions}
               setQuestions={setQuestions}
