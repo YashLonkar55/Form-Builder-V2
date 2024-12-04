@@ -6,7 +6,21 @@ import PreviewQuestion from './PreviewQuestion';
 const FormPreview = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [formData, setFormData] = React.useState(location.state?.formData);
+  const [formData, setFormData] = React.useState(null);
+
+  React.useEffect(() => {
+    const data = location.state?.formData;
+    if (!data) {
+      navigate('/', { replace: true });
+      return;
+    }
+    setFormData(data);
+  }, [location.state, navigate]);
+
+  const handleBackToEditor = () => {
+    // Pass the form data back to the editor
+    navigate('/', { state: { formData } });
+  };
 
   const handleQuestionUpdate = (questionId, updatedQuestion) => {
     setFormData(prevData => ({
@@ -45,7 +59,7 @@ const FormPreview = () => {
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-700">No form data available</h2>
           <button
-            onClick={() => navigate('/')}
+            onClick={handleBackToEditor}
             className="mt-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
           >
             Return to Form Builder
@@ -60,7 +74,7 @@ const FormPreview = () => {
       <header className="bg-white shadow-sm fixed top-0 left-0 right-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <button
-            onClick={() => navigate('/')}
+            onClick={handleBackToEditor}
             className="flex items-center text-gray-600 hover:text-gray-900"
           >
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
