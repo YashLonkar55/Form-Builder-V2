@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import FormHeader from './FormHeader';
 import QuestionCard from './QuestionCard';
 import QuestionToolbar from './QuestionToolbar';
-import { EyeIcon, DocumentCheckIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, DocumentCheckIcon, TrashIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import { saveForm } from '../../api/formApi';
 
 const FormBuilder = () => {
@@ -14,7 +14,8 @@ const FormBuilder = () => {
   const [headerImage, setHeaderImage] = useState(null);
   const [saving, setSaving] = useState(false);
 
-    // Initialize form data from location state (for preview return)
+  // Initialize form data from location state (for preview return)
+
   useEffect(() => {
     if (location.state?.formData) {
       const { formTitle: savedTitle, headerImage: savedImage, questions: savedQuestions } = location.state.formData;
@@ -48,10 +49,11 @@ const FormBuilder = () => {
 
   const addQuestion = (type) => {
     const newQuestion = {
-      id: Date.now(),
-      type,
-      question: '',
-      options: type === 'categorize'
+        id: Date.now(),
+        type,
+        question: '',
+        section: '',
+        options: type === 'categorize'
         ? {
             column1: [],
             column2: [],
@@ -89,6 +91,56 @@ const FormBuilder = () => {
     setQuestions([]);
     // Clear localStorage
     localStorage.removeItem('currentForm');
+  };
+
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('questionIndex', index.toString());
+    e.target.classList.add('opacity-50');
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.classList.remove('opacity-50');
+    e.target.classList.remove('border-t-4', 'border-b-4');
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    const draggedIndex = parseInt(e.dataTransfer.getData('questionIndex'));
+    if (draggedIndex === index) return;
+    
+    const element = e.currentTarget;
+    const rect = element.getBoundingClientRect();
+    const midPoint = rect.top + rect.height / 2;
+    
+    element.classList.remove('border-t-4', 'border-b-4');
+    if (e.clientY < midPoint) {
+      element.classList.add('border-t-4');
+    } else {
+      element.classList.add('border-b-4');
+    }
+  };
+
+  const handleSectionChange = (questionId, newSection) => {
+    setQuestions(prevQuestions =>
+      prevQuestions.map(q =>
+        q.id === questionId
+          ? { ...q, section: newSection }
+          : q
+      )
+    );
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    const sourceIndex = parseInt(e.dataTransfer.getData('questionIndex'));
+    if (sourceIndex === targetIndex) return;
+    
+    e.currentTarget.classList.remove('border-t-4', 'border-b-4');
+    
+    const newQuestions = [...questions];
+    const [movedQuestion] = newQuestions.splice(sourceIndex, 1);
+    newQuestions.splice(targetIndex, 0, movedQuestion);
+    setQuestions(newQuestions);
   };
 
   const handlePreview = () => {
@@ -155,13 +207,40 @@ const FormBuilder = () => {
 
         <div className="mt-6 space-y-4">
           {questions.map((question, index) => (
-            <QuestionCard
-              key={question._id || index} // Use _id if available; fallback to index
-              question={question}
-              questions={questions}
-              setQuestions={setQuestions}
-            />
-          ))}
+
+            <div
+              key={question.id || index}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              className="transition-all border-transparent border-4 group"
+            >
+              <div className="flex items-start gap-2 bg-white rounded-lg shadow-sm p-6">
+              <div className="cursor-move mt-2">
+                <Bars3Icon className="h-6 w-6 text-gray-400 hover:text-gray-600" />
+              </div>
+              <div className="flex-1">
+                <div className="mb-4">
+                <input
+                  type="text"
+                  value={question.section || ''}
+                  onChange={(e) => handleSectionChange(question.id, e.target.value)}
+                  placeholder="Section name (optional)"
+                  className="w-full border-b border-gray-200 pb-1 text-sm text-gray-600 focus:outline-none focus:border-purple-500"
+                />
+                </div>
+                <QuestionCard
+                question={question}
+                questions={questions}
+                setQuestions={setQuestions}
+                />
+              </div>
+              </div>
+            </div>
+            ))}
+
         </div>
 
         <QuestionToolbar onAddQuestion={addQuestion} />

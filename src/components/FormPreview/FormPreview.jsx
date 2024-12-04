@@ -53,19 +53,50 @@ const FormPreview = () => {
     });
   };
 
+  const renderQuestionsBySection = () => {
+    if (!formData?.questions?.length) return null;
+
+    let currentSection = null;
+    return formData.questions.map((question, index) => {
+      const showSectionHeader = question.section !== currentSection;
+      if (showSectionHeader) {
+        currentSection = question.section;
+      }
+
+      return (
+        <React.Fragment key={question.id}>
+          {showSectionHeader && question.section && (
+            <h2 className="text-lg font-medium text-gray-700 mb-4">{question.section}</h2>
+          )}
+          <PreviewQuestion
+            question={question}
+            index={index}
+            updateQuestion={(updatedQuestion) => 
+              handleQuestionUpdate(question.id, updatedQuestion)
+            }
+            onOptionReorder={(sourceIndex, destinationIndex) =>
+              handleOptionReorder(question.id, sourceIndex, destinationIndex)
+            }
+          />
+        </React.Fragment>
+      );
+    });
+  };
+
+
   if (!formData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-700">No form data available</h2>
           <button
-            onClick={handleBackToEditor}
-            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+          onClick={handleBackToEditor}
+          className="mt-4 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
           >
-            Return to Form Builder
+          Return to Form Builder
           </button>
         </div>
-      </div>
+        </div>
     );
   }
 
@@ -98,20 +129,9 @@ const FormPreview = () => {
           <div className="p-6">
             <h1 className="text-3xl font-normal mb-8">{formData.formTitle}</h1>
             <div className="space-y-6">
-              {formData.questions.map((question, index) => (
-                <PreviewQuestion
-                  key={question.id}
-                  question={question}
-                  index={index}
-                  updateQuestion={(updatedQuestion) => 
-                  handleQuestionUpdate(question.id, updatedQuestion)
-                  }
-                  onOptionReorder={(sourceIndex, destinationIndex) =>
-                  handleOptionReorder(question.id, sourceIndex, destinationIndex)
-                  }
-                />
-              ))}
+              {renderQuestionsBySection()}
             </div>
+
           </div>
         </div>
       </main>
